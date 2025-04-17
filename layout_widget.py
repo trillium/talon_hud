@@ -2,7 +2,7 @@ from talon import canvas, ui, actions
 from .base_widget import BaseWidget
 from .utils import layout_rich_text
 from .content.typing import HudContentPage, HudPanelContent
-from random import randint
+import secrets
 
 class LayoutWidget(BaseWidget):
     """This widget has a layout pass and changes the mouse capture area based on the content
@@ -238,9 +238,9 @@ class LayoutWidget(BaseWidget):
         return False
 
     def get_random_colour(self):    
-        red = randint(180, 255)
-        green = randint(180, 255)
-        blue = randint(180, 255)
+        red = secrets.SystemRandom().randint(180, 255)
+        green = secrets.SystemRandom().randint(180, 255)
+        blue = secrets.SystemRandom().randint(180, 255)
         
         red_hex = "0" + format(red, "x") if red <= 15 else format(red, "x")
         green_hex = "0" + format(green, "x") if green <= 15 else format(green, "x")
