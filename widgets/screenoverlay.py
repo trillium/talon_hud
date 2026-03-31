@@ -2,7 +2,7 @@ from ..base_widget import BaseWidget
 from ..utils import layout_rich_text, hit_test_rect, is_light_colour, hex_to_ints
 from ..content.typing import HudScreenRegion, HudParticle
 from ..widget_preferences import HeadUpDisplayUserWidgetPreferences
-from talon import skia, ui, cron, ctrl, canvas
+from talon import skia, ui, cron, ctrl, canvas, settings
 from talon.types.point import Point2d
 import time
 import numpy
@@ -97,7 +97,7 @@ class HeadUpScreenOverlay(BaseWidget):
 
     def enable(self, persisted=False):
         if not self.enabled:
-            self.enabled = True        
+            self.enabled = True
             self.previous_pos = ctrl.mouse_pos()
             
             # Copied over from base widget and altered to reflect the no-canvas state of this widget            
@@ -110,6 +110,7 @@ class HeadUpScreenOverlay(BaseWidget):
             self.focus_canvas = canvas.Canvas(self.x, self.y, 200, self.font_size * 2)
             self.focus_canvas.blocks_mouse = True
             self.focus_canvas.register("draw", self.draw_focus_name)
+            self.focus_canvas.freeze()
             if not self.focused:
                 self.focus_canvas.hide()
             
@@ -132,6 +133,7 @@ class HeadUpScreenOverlay(BaseWidget):
                 self.event_dispatch.request_persist_preferences()
             
             if self.focus_canvas:
+                self.focus_canvas.freeze()                
                 self.focus_canvas.unregister("draw", self.draw_focus_name)
                 self.focus_canvas.close()
                 self.focus_canvas = None
@@ -182,6 +184,7 @@ class HeadUpScreenOverlay(BaseWidget):
             if chunk_key not in self.particle_canvases or self.particle_canvases[chunk_key] is None:
                 chunk_data = needed_chunks[chunk_key]
                 particle_canvas = canvas.Canvas(chunk_data[0], chunk_data[1], chunk_data[2], chunk_data[3])
+                particle_canvas.allows_capture = settings.get("user.talon_hud_allows_capture")
                 particle_canvas.register('draw', self.draw_particles)
                 self.particle_canvases[chunk_key] = particle_canvas
 
@@ -195,8 +198,8 @@ class HeadUpScreenOverlay(BaseWidget):
         else:
             for chunk_key in self.particle_canvases:
                 if self.particle_canvases[chunk_key] is not None:
-                    self.particle_canvases[chunk_key].close()
                     self.particle_canvases[chunk_key].unregister('draw', self.draw_particles)
+                    self.particle_canvases[chunk_key].close()                    
                     self.particle_canvases[chunk_key] = None
             self.particle_poller = None
 
@@ -234,6 +237,8 @@ class HeadUpScreenOverlay(BaseWidget):
                 if region_found == False:
                     indices_to_clear.append(index)
                     canvas_reference["canvas"].unregister("draw", canvas_reference["callback"])
+                    canvas_reference["callback"] = None
+                    canvas_reference["canvas"].close()
                     canvas_reference["region"] = None
                     canvas_reference["canvas"] = None
                     canvas_reference = None
@@ -245,7 +250,7 @@ class HeadUpScreenOverlay(BaseWidget):
         indices_to_clear.reverse()
         for index in indices_to_clear:
             self.canvases.pop(index)
-        
+
         if len(self.regions) > 0:
             if soft_enable:
                 self.soft_enable()
@@ -267,7 +272,7 @@ class HeadUpScreenOverlay(BaseWidget):
                 canvas_reference["region"] = region
                 canvas_reference["canvas"].register("draw", canvas_reference["callback"])
                 if not self.canvas_visibility:
-                    canvas_reference["canvas"].hide()                
+                    canvas_reference["canvas"].hide()
                 canvas_reference["canvas"].freeze()
                 self.canvases.append(canvas_reference)
 
@@ -275,6 +280,8 @@ class HeadUpScreenOverlay(BaseWidget):
         for canvas_reference in self.canvases:
             if canvas_reference:
                 canvas_reference["canvas"].unregister("draw", canvas_reference["callback"])
+                canvas_reference["callback"] = None
+                canvas_reference["canvas"].close()
                 canvas_reference["region"] = None
                 canvas_reference["canvas"] = None
                 canvas_reference = None
@@ -513,7 +520,7 @@ class HeadUpScreenOverlay(BaseWidget):
 
             self.setup_type = setup_type
             self.preferences.mark_changed = True
-            self.canvas.pause()
+            self.canvas.freeze()
             self.canvas.unregister("draw", self.setup_draw_cycle)
             self.canvas = None
             
@@ -554,7 +561,7 @@ class HeadUpScreenOverlay(BaseWidget):
                 self.canvas = self.generate_canvas(self.x, self.y, self.limit_width, self.limit_height)
                 self.canvas.register("draw", self.setup_draw_cycle)
             self.canvas.move(self.x, self.y)
-            self.canvas.resume()
+            self.refresh_drawing()
             super().start_setup(setup_type, mouse_position)
                 
     def setup_move(self, pos):
@@ -613,6 +620,7 @@ class HeadUpScreenOverlay(BaseWidget):
         """Implement focus rendering / canvas unfocusing"""
         self.focused = False
         if self.enabled and self.focus_canvas:
+            self.focus_canvas.freeze()
             self.focus_canvas.hide()
 
     def set_visibility(self, visible = True):
